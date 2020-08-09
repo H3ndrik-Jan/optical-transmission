@@ -1,26 +1,25 @@
-//Pin connected to ST_CP of 74HC595 (RCLK)
-int latchclockPin = 8;
-//Pin connected to SH_CP of 74HC595 (SRCLK)
-int clockPin = 12;
-////Pin connected to DS (SER) of 74HC595
-int dataPin = 11;
+//Simple example program for receiving bytes from the fibre optic receiver.
+//An interrupt is triggered when new data comes in. The data is then read and 
+//sent to an 74HC595 in this example
 
+//Pin connected to the output of the fibre optic receiver
 #define RECEIVE1_PIN 2
-#define RECEIVE2_PIN 3
+//Pin connected to ST_CP (RCLK) of 74HC595 
+#define latchclockPin 8
+//Pin connected to SH_CP (SRCLK) of 74HC595 
+#define clockPin 12
+//Pin connected to DS (SER) of 74HC595
+#define dataPin  11
+
+//Transmission speed multiplier. Higher means lower speed
+#define SPEED 10
 
 void writeShiftRegister(uint8_t outbyte);
-
 uint8_t getByte(void);
-volatile uint8_t newByte = 0xFF;
+
+uint8_t newByte = 0xFF;
 volatile bool receiveFlag = true;
 
-
-char reverseBits(char original) {
-  int8_t reversed = 0;
-  for(uint8_t i=0;i<8;i++)
-     reversed |= ((original>>i) & 0b1)<<(7-i);
-   return reversed;
-}
 
 void setup() {
   //set pins to output so you can control the shift register
@@ -28,37 +27,51 @@ void setup() {
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
   pinMode(RECEIVE1_PIN, INPUT);
-  pinMode(RECEIVE2_PIN, INPUT);
   pinMode(4, OUTPUT);
-//  attachInterrupt(digitalPinToInterrupt(RECEIVE1_PIN), ISR_RECEIVE1, RISING);
+  pinMode(5, OUTPUT);
+  digitalWrite(5, LOW);
+  digitalWrite(4, LOW);
+  attachInterrupt(digitalPinToInterrupt(RECEIVE1_PIN), ISR_RECEIVE1, RISING);
   Serial.begin(9600);
 }
 
 void loop() {
- // if(receiveFlag){
- while(!digitalRead(RECEIVE1_PIN));
- delayMicroseconds(200);
-    newByte = getByte();
+  if(receiveFlag){
+    static uint8_t lastByte = 0;
+    newByte = readByte();
+    if(newByte != lastByte+1){
+      digitalWrite(5, HIGH);
+    }
+    else digitalWrite(5, LOW);
+
+    lastByte = newByte;
     writeShiftRegister(newByte);
     receiveFlag = false;
-    Serial.println(newByte);
+
     interrupts();
-//  }
+    Serial.println(newByte);
+  }
+}
 
+uint8_t readByte(void){
+  uint8_t inByte;
+    digitalWrite(4, HIGH);
+    while(digitalRead(RECEIVE1_PIN)); //  Wait for start pulse to end
 
-  // count from 0 to 255 and display the number 
-  // on the LEDs
- // for (int numberToDisplay = 0; numberToDisplay < 256; numberToDisplay++) {
- //   Serial.print(numberToDisplay);
-    // take the latchPin low so 
-    // the LEDs don't change while you're sending in bits:
-   // digitalWrite(latchPin, LOW);
-  //  writeShiftRegister(numberToDisplay);
-    //take the latch pin high so the LEDs will light up:
-  //  digitalWrite(latchPin, HIGH);
-    // pause before next value:
- //   delay(250);
-//  }
+    for(int i=0; i<8; i++){
+      digitalWrite(4, !digitalRead(4));
+      while(!digitalRead(RECEIVE1_PIN)); //Wait for bitpulse
+      while(digitalRead(RECEIVE1_PIN)); //Wait for bitpulse to end
+      delayMicroseconds(SPEED*4.5);  
+      bitWrite(inByte, i, !digitalRead(RECEIVE1_PIN));
+    }
+  digitalWrite(4, LOW);
+  return inByte;
+}
+
+void ISR_RECEIVE1(void){
+  noInterrupts();
+  receiveFlag = true;
 }
 
 void writeShiftRegister(uint8_t outbyte){
@@ -74,28 +87,4 @@ void writeShiftRegister(uint8_t outbyte){
     }
   
   digitalWrite(latchclockPin, HIGH);
-}
-
-uint8_t getByte(void){
-  unsigned char inByte = 0x00;
-
-  for(uint8_t index = 0; index<8; index++){
-   // (inByte >> index);// |= digitalRead(RECEIVE1_PIN);// =  // Shift bits one to left
-    //inByte &= digitalRead(RECEIVE1_PIN); //Write received bit on position
-    bitWrite(inByte, 7-index, digitalRead(RECEIVE1_PIN));
-    delayMicroseconds(95);
-    digitalWrite(4, !digitalRead(4));
-  }
-
-  Serial.println(inByte, BIN);
-  return inByte;
-  //return  (inByte)+((inByte>>8)&0x01)*128;//^((inByte>>0)&0x01))*128);
-  //return (unsigned )reverseBits(inByte);
-}
-
-void ISR_RECEIVE1(void){
-  noInterrupts();
-  delayMicroseconds(200);
-  //newByte = getByte();
-  receiveFlag = true;
 }
