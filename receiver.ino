@@ -54,7 +54,7 @@ void loop() {
 }
 
 uint8_t readByte(void){
-  uint8_t inByte;
+  uint8_t inByte = 0;
     digitalWrite(4, HIGH);
     while(digitalRead(RECEIVE1_PIN)); //  Wait for start pulse to end
 
@@ -63,7 +63,7 @@ uint8_t readByte(void){
       while(!digitalRead(RECEIVE1_PIN)); //Wait for bitpulse
       while(digitalRead(RECEIVE1_PIN)); //Wait for bitpulse to end
       delayMicroseconds(SPEED*4.5);  
-      bitWrite(inByte, i, !digitalRead(RECEIVE1_PIN));
+      inByte = inByte | (!digitalRead(RECEIVE1_PIN)<<i);
     }
   digitalWrite(4, LOW);
   return inByte;
